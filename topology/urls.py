@@ -9,7 +9,10 @@ from django.urls import path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 
+from .views import SiteViewSet
+
 router = DefaultRouter()
+router.register('sites', SiteViewSet)
 
 urlpatterns = [
     path('schema/', SpectacularAPIView.as_view(), name='schema'),
