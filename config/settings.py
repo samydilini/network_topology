@@ -37,6 +37,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # Third-party
+    'rest_framework',
+    'drf_spectacular',
+    # Local
+    'topology',
 ]
 
 MIDDLEWARE = [
@@ -124,4 +129,30 @@ MAILERS = {
     'default': {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
+}
+
+
+# Django REST Framework
+# https://www.django-rest-framework.org/api-guide/settings/
+
+REST_FRAMEWORK = {
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Pagination is intentionally not configured; list and trace endpoints
+    # return full collections (see docs/implementation-plan.md).
+    'DEFAULT_PAGINATION_CLASS': None,
+}
+
+
+# drf-spectacular (OpenAPI schema / Swagger UI)
+# https://drf-spectacular.readthedocs.io/en/latest/settings.html
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Network Topology Tracing API',
+    'DESCRIPTION': (
+        'REST API for managing network sites, devices, interfaces, and the '
+        'connections between their interfaces, with a specialised endpoint for '
+        'tracing connections associated with a site, device, or interface.'
+    ),
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
 }
