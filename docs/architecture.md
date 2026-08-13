@@ -231,7 +231,9 @@ The `Connection` model contains:
 
 Both endpoint fields reference the `Interface` model.
 
-The API exposes these endpoints as the hierarchical `start` and `end` structures required by the specification.
+Create/update requests set these endpoints directly by Interface primary key
+(`start_interface`, `end_interface`); responses expose the derived hierarchy as
+`start_target` and `end_target`.
 
 The `connection_id` field is unique.
 
@@ -254,27 +256,19 @@ Create/update requests use:
 
 ```json
 {
-  "start": {
-    "site": 1,
-    "device": 2,
-    "interface": 5
-  },
-  "end": {
-    "site": 1,
-    "device": 3,
-    "interface": 8
-  }
+  "start_interface": 5,
+  "end_interface": 8
 }
 ```
 
 The serializer validates:
 
-1. Site exists.
-2. Device exists.
-3. Device belongs to the supplied Site.
-4. Interface exists.
-5. Interface belongs to the supplied Device.
-6. Start and end interfaces are different.
+1. Start Interface exists.
+2. End Interface exists.
+3. Start and end Interfaces are different.
+
+The Site and Device for each endpoint are derived from the Interface's relationships
+(Interface → Device → Site) and are not supplied in the request.
 
 ### Connection output
 
@@ -513,9 +507,7 @@ Used for rules such as:
 
 Used for request-specific rules such as:
 
-* validating the complete endpoint hierarchy
-* checking that an Interface belongs to the supplied Device
-* checking that a Device belongs to the supplied Site
+* validating that each endpoint Interface exists
 * ensuring start and end Interfaces are different
 * validating request fields and status values
 
@@ -654,7 +646,7 @@ Verify:
 Verify:
 
 * valid payloads
-* invalid hierarchical endpoint combinations
+* invalid or nonexistent endpoint Interfaces
 * duplicate values
 * invalid statuses
 * identical start/end Interfaces

@@ -94,37 +94,35 @@ A Connection represents a point-to-point connection between two network Interfac
 | `connection_id` | String             |      Yes | Unique alphanumeric identifier                 |
 | `name`          | String             |       No | Optional description                           |
 | `status`        | String             |      Yes | `Connected` or `Disconnected`                  |
-| `start`         | Interface endpoint |      Yes | Complete `{site, device, interface}` hierarchy |
-| `end`           | Interface endpoint |      Yes | Complete `{site, device, interface}` hierarchy |
+| `start_interface` | Foreign key      |      Yes | Must reference an existing Interface           |
+| `end_interface`   | Foreign key      |      Yes | Must reference an existing Interface           |
 
 A Connection has exactly two endpoints:
 
-* `start`
-* `end`
+* `start_interface`
+* `end_interface`
 
-Each endpoint must identify an Interface through the complete hierarchy:
+Each endpoint is identified directly by the Interface's primary key:
 
 ```json
 {
-  "site": 1,
-  "device": 2,
-  "interface": 5
+  "start_interface": 5,
+  "end_interface": 8
 }
 ```
 
-The hierarchy must be valid:
+The Site and Device associated with each endpoint are derived from the Interface's relationships:
 
 ```text
-Site
+Interface
  └── Device
-      └── Interface
+      └── Site
 ```
 
 Therefore:
 
-* The supplied Device must belong to the supplied Site.
-* The supplied Interface must belong to the supplied Device.
-* The supplied Interface must exist.
+* The supplied start Interface must exist.
+* The supplied end Interface must exist.
 * The start and end Interfaces must be distinct.
 
 A Connection must not reference the same Interface as both its start and end endpoint.
@@ -143,9 +141,9 @@ Site 1 ──────── * Device
 
 Connection
     |
-    ├── start ─── Interface
+    ├── start_interface ─── Interface
     |
-    └── end ───── Interface
+    └── end_interface ───── Interface
 ```
 
 Connections are represented through their Interface endpoints.
@@ -188,14 +186,13 @@ No additional Site or Device relationship is required on Connection because Site
 
 * `connection_id` is required.
 * `connection_id` must be unique.
-* `connection_id` must contain only alphanumeric characters, with the permitted identifier format documented by the API.
+* `connection_id` must be an alphanumeric identifier (e.g. `CONN1002`).
 * `status` must be one of:
 
   * `Connected`
   * `Disconnected`
-* Both `start` and `end` endpoints are required.
-* Each endpoint must contain `site`, `device`, and `interface`.
-* The Site, Device, and Interface hierarchy must be valid.
+* Both `start_interface` and `end_interface` are required.
+* Each endpoint must reference an existing Interface.
 * The start and end Interfaces must be different.
 
 Invalid input must result in an appropriate HTTP `400 Bad Request` response.
@@ -372,7 +369,7 @@ GET /api/connections/
 POST /api/connections/
 ```
 
-The request must accept the complete hierarchical structure for both endpoints.
+The request identifies each endpoint directly by Interface primary key.
 
 Example:
 
@@ -381,27 +378,16 @@ Example:
   "connection_id": "CONN1002",
   "name": "Core Switch Uplink",
   "status": "Connected",
-  "start": {
-    "site": 1,
-    "device": 1,
-    "interface": 4
-  },
-  "end": {
-    "site": 1,
-    "device": 2,
-    "interface": 9
-  }
+  "start_interface": 4,
+  "end_interface": 9
 }
 ```
 
 The API must validate that:
 
-```text
-site 1 → device 1 → interface 4
-site 1 → device 2 → interface 9
-```
-
-are valid hierarchical relationships.
+* Interface 4 exists.
+* Interface 9 exists.
+* The start and end Interfaces are different.
 
 ### Retrieve Connection
 
@@ -801,8 +787,8 @@ Tests should include:
 * update Connection
 * delete Connection
 * duplicate `connection_id` rejected
-* invalid start hierarchy rejected
-* invalid end hierarchy rejected
+* invalid start_interface rejected
+* invalid end_interface rejected
 * missing endpoint rejected
 * same Interface used as both endpoints rejected
 * invalid status rejected
@@ -849,8 +835,8 @@ The implementation is considered complete when:
 1. All four resources are represented in the relational data model.
 2. Required relationships and uniqueness constraints are enforced.
 3. CRUD endpoints are available for Site, Device, Interface, and Connection.
-4. Connection creation and update accept complete `{site, device, interface}` endpoint structures.
-5. Hierarchical endpoint relationships are validated.
+4. Connection creation and update accept `start_interface` and `end_interface` primary keys.
+5. Both endpoint Interfaces are validated to exist and to be distinct.
 6. A Connection cannot use the same Interface for both endpoints.
 7. The trace endpoint accepts `site`, `device`, and `interface` as tracing types.
 8. Interface tracing returns all Connections touching that Interface.
