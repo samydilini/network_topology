@@ -6,7 +6,7 @@ Resource-specific tests are added in later phases.
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from topology.models import Site
+from topology.models import Device, Site
 
 
 class SchemaEndpointTests(APITestCase):
@@ -86,3 +86,76 @@ class SiteAPITests(APITestCase):
         site = Site.objects.create(name='S1', status='Active')
         response = self.client.patch(self.detail_url(site.id), {'name': 'X'}, format='json')
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_delete_site_with_devices_returns_409(self):
+        site = Site.objects.create(name='S1', status='Active')
+        Device.objects.create(name='D1', site=site, serial_number='SN1')
+        response = self.client.delete(self.detail_url(site.id))
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(Site.objects.filter(id=site.id).exists())
+
+
+class DeviceAPITests(APITestCase):
+    url = '/api/devices/'
+
+    def setUp(self):
+        self.site = Site.objects.create(name='London Data Center', status='Active')
+        self.valid_payload = {
+            'name': 'Core-Switch-02',
+            'site': self.site.id,
+            'serial_number': 'SN123456789',
+        }
+
+    def detail_url(self, device_id):
+        return f'{self.url}{device_id}/'
+
+    def create_device(self, **overrides):
+        data = {'name': 'D1', 'site': self.site, 'serial_number': 'SN-D1'}
+        data.update(overrides)
+        return Device.objects.create(**data)
+
+    def test_create_device(self):
+        response = self.client.post(self.url, self.valid_payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['name'], 'Core-Switch-02')
+        self.assertEqual(response.data['site'], self.site.id)
+
+    def test_retrieve_device(self):
+        device = self.create_device()
+        response = self.client.get(self.detail_url(device.id))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['id'], device.id)
+
+    def test_update_device(self):
+        device = self.create_device()
+        payload = {'name': 'D1-renamed', 'site': self.site.id, 'serial_number': 'SN-D1'}
+        response = self.client.put(self.detail_url(device.id), payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        device.refresh_from_db()
+        self.assertEqual(device.name, 'D1-renamed')
+
+    def test_delete_device(self):
+        device = self.create_device()
+        response = self.client.delete(self.detail_url(device.id))
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Device.objects.filter(id=device.id).exists())
+
+    def test_duplicate_name_rejected(self):
+        self.create_device(name='Core-Switch-02', serial_number='SN-OTHER')
+        response = self.client.post(self.url, self.valid_payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_duplicate_serial_number_rejected(self):
+        self.create_device(name='Other-Device', serial_number='SN123456789')
+        response = self.client.post(self.url, self.valid_payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_nonexistent_site_rejected(self):
+        payload = {**self.valid_payload, 'site': 99999}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_missing_site_rejected(self):
+        payload = {'name': 'No-Site', 'serial_number': 'SN-NS'}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

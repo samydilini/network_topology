@@ -140,6 +140,8 @@ REST_FRAMEWORK = {
     # Pagination is intentionally not configured; list and trace endpoints
     # return full collections (see docs/implementation-plan.md).
     'DEFAULT_PAGINATION_CLASS': None,
+    # Map protected-delete failures (on_delete=PROTECT) to 409 Conflict.
+    'EXCEPTION_HANDLER': 'topology.exceptions.custom_exception_handler',
 }
 
 
