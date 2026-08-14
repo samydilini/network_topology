@@ -1,3 +1,4 @@
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -32,3 +33,32 @@ class Device(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Interface(models.Model):
+    """A network interface belonging to a Device."""
+
+    class Status(models.TextChoices):
+        UP = 'Up', 'Up'
+        DOWN = 'Down', 'Down'
+        MAINTENANCE = 'Maintenance', 'Maintenance'
+
+    name = models.CharField(max_length=255)
+    device = models.ForeignKey(Device, on_delete=models.PROTECT, related_name='interfaces')
+    speed = models.PositiveIntegerField(
+        validators=[MinValueValidator(1)],
+        help_text='Throughput in Mbps; must be a positive integer.',
+    )
+    status = models.CharField(max_length=20, choices=Status.choices)
+
+    class Meta:
+        ordering = ['id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['device', 'name'],
+                name='unique_interface_name_per_device',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.device.name}:{self.name}'

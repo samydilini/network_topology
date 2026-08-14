@@ -6,7 +6,7 @@ Resource-specific tests are added in later phases.
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from topology.models import Device, Site
+from topology.models import Device, Interface, Site
 
 
 class SchemaEndpointTests(APITestCase):
@@ -157,5 +157,98 @@ class DeviceAPITests(APITestCase):
 
     def test_missing_site_rejected(self):
         payload = {'name': 'No-Site', 'serial_number': 'SN-NS'}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_delete_device_with_interfaces_returns_409(self):
+        device = self.create_device()
+        Interface.objects.create(name='Gi0/1', device=device, speed=1000, status='Up')
+        response = self.client.delete(self.detail_url(device.id))
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        self.assertTrue(Device.objects.filter(id=device.id).exists())
+
+
+class InterfaceAPITests(APITestCase):
+    url = '/api/interfaces/'
+
+    def setUp(self):
+        self.site = Site.objects.create(name='London Data Center', status='Active')
+        self.device = Device.objects.create(name='Core-Switch-02', site=self.site, serial_number='SN1')
+        self.other_device = Device.objects.create(name='Router-01', site=self.site, serial_number='SN2')
+        self.valid_payload = {
+            'name': 'GigabitEthernet0/24',
+            'device': self.device.id,
+            'speed': 1000,
+            'status': 'Up',
+        }
+
+    def detail_url(self, interface_id):
+        return f'{self.url}{interface_id}/'
+
+    def create_interface(self, **overrides):
+        data = {'name': 'Gi0/1', 'device': self.device, 'speed': 1000, 'status': 'Up'}
+        data.update(overrides)
+        return Interface.objects.create(**data)
+
+    def test_create_interface(self):
+        response = self.client.post(self.url, self.valid_payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['name'], 'GigabitEthernet0/24')
+        self.assertEqual(response.data['device'], self.device.id)
+
+    def test_retrieve_interface(self):
+        interface = self.create_interface()
+        response = self.client.get(self.detail_url(interface.id))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['id'], interface.id)
+
+    def test_update_interface(self):
+        interface = self.create_interface()
+        payload = {'name': 'Gi0/1', 'device': self.device.id, 'speed': 10000, 'status': 'Down'}
+        response = self.client.put(self.detail_url(interface.id), payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        interface.refresh_from_db()
+        self.assertEqual(interface.speed, 10000)
+        self.assertEqual(interface.status, 'Down')
+
+    def test_delete_interface(self):
+        interface = self.create_interface()
+        response = self.client.delete(self.detail_url(interface.id))
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Interface.objects.filter(id=interface.id).exists())
+
+    def test_duplicate_name_same_device_rejected(self):
+        self.create_interface(name='GigabitEthernet0/24')
+        response = self.client.post(self.url, self.valid_payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_same_name_different_device_allowed(self):
+        self.create_interface(name='GigabitEthernet0/24')
+        payload = {**self.valid_payload, 'device': self.other_device.id}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_nonexistent_device_rejected(self):
+        payload = {**self.valid_payload, 'device': 99999}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_zero_speed_rejected(self):
+        payload = {**self.valid_payload, 'speed': 0}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_negative_speed_rejected(self):
+        payload = {**self.valid_payload, 'speed': -100}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_non_integer_speed_rejected(self):
+        payload = {**self.valid_payload, 'speed': 'fast'}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_invalid_status_rejected(self):
+        payload = {**self.valid_payload, 'status': 'Bogus'}
         response = self.client.post(self.url, payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
