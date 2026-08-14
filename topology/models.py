@@ -62,3 +62,27 @@ class Interface(models.Model):
 
     def __str__(self):
         return f'{self.device.name}:{self.name}'
+
+
+class Connection(models.Model):
+    """A point-to-point connection between two network Interfaces."""
+
+    class Status(models.TextChoices):
+        CONNECTED = 'Connected', 'Connected'
+        DISCONNECTED = 'Disconnected', 'Disconnected'
+
+    connection_id = models.CharField(max_length=50, unique=True)
+    name = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices)
+    start_interface = models.ForeignKey(
+        Interface, on_delete=models.PROTECT, related_name='+',
+    )
+    end_interface = models.ForeignKey(
+        Interface, on_delete=models.PROTECT, related_name='+',
+    )
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return self.connection_id

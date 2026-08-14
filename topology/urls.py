@@ -9,12 +9,13 @@ from django.urls import path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 
-from .views import DeviceViewSet, InterfaceViewSet, SiteViewSet
+from .views import ConnectionViewSet, DeviceViewSet, InterfaceViewSet, SiteViewSet
 
 router = DefaultRouter()
 router.register('sites', SiteViewSet)
 router.register('devices', DeviceViewSet)
 router.register('interfaces', InterfaceViewSet)
+router.register('connections', ConnectionViewSet)
 
 urlpatterns = [
     path('schema/', SpectacularAPIView.as_view(), name='schema'),

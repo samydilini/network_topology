@@ -6,7 +6,7 @@ Resource-specific tests are added in later phases.
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from topology.models import Device, Interface, Site
+from topology.models import Connection, Device, Interface, Site
 
 
 class SchemaEndpointTests(APITestCase):
@@ -251,4 +251,116 @@ class InterfaceAPITests(APITestCase):
     def test_invalid_status_rejected(self):
         payload = {**self.valid_payload, 'status': 'Bogus'}
         response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ConnectionAPITests(APITestCase):
+    url = '/api/connections/'
+
+    def setUp(self):
+        self.site = Site.objects.create(name='London Data Center', status='Active')
+        self.device1 = Device.objects.create(name='London-Router-01', site=self.site, serial_number='SN1')
+        self.device2 = Device.objects.create(name='Core-Switch-02', site=self.site, serial_number='SN2')
+        self.iface1 = Interface.objects.create(name='Gi0/1', device=self.device1, speed=1000, status='Up')
+        self.iface2 = Interface.objects.create(name='Gi0/24', device=self.device2, speed=1000, status='Up')
+        self.valid_payload = {
+            'connection_id': 'CONN1002',
+            'name': 'Core Switch Uplink',
+            'status': 'Connected',
+            'start_interface': self.iface1.id,
+            'end_interface': self.iface2.id,
+        }
+
+    def detail_url(self, connection_id):
+        return f'{self.url}{connection_id}/'
+
+    def create_connection(self, **overrides):
+        data = {
+            'connection_id': 'CONN0001', 'status': 'Connected',
+            'start_interface': self.iface1, 'end_interface': self.iface2,
+        }
+        data.update(overrides)
+        return Connection.objects.create(**data)
+
+    def test_create_connection_returns_target_hierarchy(self):
+        response = self.client.post(self.url, self.valid_payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        # Response uses the derived hierarchy, not the flat input IDs.
+        self.assertNotIn('start_interface', response.data)
+        self.assertEqual(
+            response.data['start_target'],
+            {
+                'site': {'id': self.site.id, 'name': self.site.name},
+                'device': {'id': self.device1.id, 'name': self.device1.name},
+                'interface': {'id': self.iface1.id, 'name': self.iface1.name},
+            },
+        )
+        self.assertEqual(response.data['end_target']['interface']['id'], self.iface2.id)
+
+    def test_retrieve_connection(self):
+        connection = self.create_connection()
+        response = self.client.get(self.detail_url(connection.id))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['connection_id'], 'CONN0001')
+        self.assertIn('start_target', response.data)
+
+    def test_update_connection(self):
+        connection = self.create_connection()
+        payload = {**self.valid_payload, 'connection_id': 'CONN0001', 'status': 'Disconnected'}
+        response = self.client.put(self.detail_url(connection.id), payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        connection.refresh_from_db()
+        self.assertEqual(connection.status, 'Disconnected')
+        self.assertIn('start_target', response.data)
+
+    def test_delete_connection(self):
+        connection = self.create_connection()
+        response = self.client.delete(self.detail_url(connection.id))
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Connection.objects.filter(id=connection.id).exists())
+
+    def test_duplicate_connection_id_rejected(self):
+        self.create_connection(connection_id='CONN1002')
+        response = self.client.post(self.url, self.valid_payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_invalid_connection_id_format_rejected(self):
+        payload = {**self.valid_payload, 'connection_id': 'CONN-1002'}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_nonexistent_start_interface_rejected(self):
+        payload = {**self.valid_payload, 'start_interface': 99999}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_nonexistent_end_interface_rejected(self):
+        payload = {**self.valid_payload, 'end_interface': 99999}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_missing_start_interface_rejected(self):
+        payload = {k: v for k, v in self.valid_payload.items() if k != 'start_interface'}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_missing_end_interface_rejected(self):
+        payload = {k: v for k, v in self.valid_payload.items() if k != 'end_interface'}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_same_interface_both_endpoints_rejected(self):
+        payload = {**self.valid_payload, 'end_interface': self.iface1.id}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_invalid_status_rejected(self):
+        payload = {**self.valid_payload, 'status': 'Bogus'}
+        response = self.client.post(self.url, payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_update_revalidates_distinct_endpoints(self):
+        connection = self.create_connection()
+        payload = {**self.valid_payload, 'connection_id': 'CONN0001', 'end_interface': self.iface1.id}
+        response = self.client.put(self.detail_url(connection.id), payload, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)

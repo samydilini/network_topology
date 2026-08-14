@@ -3,7 +3,7 @@ from django.db import IntegrityError
 from django.db.models import ProtectedError
 from django.test import TestCase
 
-from topology.models import Device, Interface, Site
+from topology.models import Connection, Device, Interface, Site
 
 
 class SiteModelTests(TestCase):
@@ -89,3 +89,37 @@ class InterfaceModelTests(TestCase):
         Interface.objects.create(name='Gi0/1', device=self.device, speed=1000, status='Up')
         with self.assertRaises(ProtectedError):
             self.device.delete()
+
+
+class ConnectionModelTests(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name='London Data Center', status='Active')
+        self.device = Device.objects.create(name='Core-Switch-02', site=self.site, serial_number='SN1')
+        self.iface_a = Interface.objects.create(name='Gi0/1', device=self.device, speed=1000, status='Up')
+        self.iface_b = Interface.objects.create(name='Gi0/2', device=self.device, speed=1000, status='Up')
+
+    def test_str_returns_connection_id(self):
+        connection = Connection.objects.create(
+            connection_id='CONN1002', status='Connected',
+            start_interface=self.iface_a, end_interface=self.iface_b,
+        )
+        self.assertEqual(str(connection), 'CONN1002')
+
+    def test_connection_id_must_be_unique(self):
+        Connection.objects.create(
+            connection_id='CONN1002', status='Connected',
+            start_interface=self.iface_a, end_interface=self.iface_b,
+        )
+        with self.assertRaises(IntegrityError):
+            Connection.objects.create(
+                connection_id='CONN1002', status='Disconnected',
+                start_interface=self.iface_b, end_interface=self.iface_a,
+            )
+
+    def test_interface_delete_is_protected_when_used_in_connection(self):
+        Connection.objects.create(
+            connection_id='CONN1002', status='Connected',
+            start_interface=self.iface_a, end_interface=self.iface_b,
+        )
+        with self.assertRaises(ProtectedError):
+            self.iface_a.delete()
