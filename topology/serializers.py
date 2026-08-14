@@ -103,3 +103,19 @@ class ConnectionReadSerializer(serializers.ModelSerializer):
     @extend_schema_field(EndpointTargetSerializer)
     def get_end_target(self, obj):
         return self._endpoint(obj.end_interface)
+
+
+class TracedObjectSerializer(serializers.Serializer):
+    """The object a trace request was run against."""
+
+    type = serializers.ChoiceField(choices=['site', 'device', 'interface'])
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+
+
+class TraceResponseSerializer(serializers.Serializer):
+    """Response body for the connection tracing endpoint."""
+
+    traced_object = TracedObjectSerializer()
+    connections_count = serializers.IntegerField()
+    connections = ConnectionReadSerializer(many=True)
