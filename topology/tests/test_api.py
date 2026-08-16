@@ -18,6 +18,19 @@ class SchemaEndpointTests(APITestCase):
         response = self.client.get('/api/docs/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    def test_schema_covers_all_resources_and_trace(self):
+        response = self.client.get('/api/schema/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        body = response.content.decode()
+        for path in (
+            '/api/sites/',
+            '/api/devices/',
+            '/api/interfaces/',
+            '/api/connections/',
+            '/api/trace/',
+        ):
+            self.assertIn(path, body)
+
 
 class SiteAPITests(APITestCase):
     url = '/api/sites/'

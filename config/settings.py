@@ -157,4 +157,23 @@ SPECTACULAR_SETTINGS = {
     ),
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    # Site, Interface, and Connection each define a distinct ``status`` choice
+    # set. Give each generated enum a unique component name so the schema does
+    # not fall back to a hashed name.
+    'ENUM_NAME_OVERRIDES': {
+        'SiteStatusEnum': [
+            ('Active', 'Active'),
+            ('Planned', 'Planned'),
+            ('Decommissioned', 'Decommissioned'),
+        ],
+        'InterfaceStatusEnum': [
+            ('Up', 'Up'),
+            ('Down', 'Down'),
+            ('Maintenance', 'Maintenance'),
+        ],
+        'ConnectionStatusEnum': [
+            ('Connected', 'Connected'),
+            ('Disconnected', 'Disconnected'),
+        ],
+    },
 }
